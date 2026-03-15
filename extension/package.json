@@ -9,8 +9,5 @@
   "devDependencies": {
     "chrome-types": "^0.1.327",
     "esbuild": "^0.20.0"
-  },
-  "dependencies": {
-    "jspdf": "^4.2.0"
   }
 }
