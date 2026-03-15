@@ -308,6 +308,27 @@ async function isNextDisabledMainWorld(tabId, lessonIndex = 0) {
     return true;
   }
 }
+async function createPdfViaOffscreen(imageDataUrls, filename) {
+  await ensureOffscreen();
+  const message = {
+    type: "create-pdf",
+    imageDataUrls,
+    filename
+  };
+  const response = await chrome.runtime.sendMessage(message);
+  if (!response.success || !response.pdfDataUrl) {
+    throw new Error(response.error || "PDF creation failed");
+  }
+  return response.pdfDataUrl;
+}
+async function savePdf(pdfDataUrl, filename) {
+  return chrome.downloads.download({
+    url: pdfDataUrl,
+    filename,
+    saveAs: false,
+    conflictAction: "uniquify"
+  });
+}
 async function captureSinglePage(tabId, lessonIndex, globalPageCounter) {
   const pageInfoRes = await getPageInfo(tabId, lessonIndex);
   if (!pageInfoRes.success || !pageInfoRes.data) {
@@ -334,7 +355,7 @@ async function captureSinglePage(tabId, lessonIndex, globalPageCounter) {
   incrementCaptured();
   log(`Saved page-${String(globalPageCounter).padStart(3, "0")}.png`);
   broadcast();
-  return isNextDisabled;
+  return { isLast: isNextDisabled, croppedDataUrl };
 }
 async function runCaptureLoop(lessonTarget = "all") {
   clearStopFlag();
@@ -380,8 +401,11 @@ async function runCaptureLoop(lessonTarget = "all") {
       }
       await sleep(TIMING.postChangeDelay);
       let isLast = false;
+      const lessonImages = [];
       while (!isStopRequested()) {
-        isLast = await captureSinglePage(tabId, lessonIdx, globalPageCounter);
+        const result = await captureSinglePage(tabId, lessonIdx, globalPageCounter);
+        isLast = result.isLast;
+        lessonImages.push(result.croppedDataUrl);
         globalPageCounter++;
         if (isLast) {
           log(`Lesson ${lessonIdx + 1}: reached last page`);
@@ -426,6 +450,17 @@ async function runCaptureLoop(lessonTarget = "all") {
         }
         await sleep(TIMING.postChangeDelay);
         await sleep(TIMING.interCycleDelay);
+      }
+      if (lessonImages.length > 0) {
+        log(`Creating PDF for lesson ${lessonIdx + 1} (${lessonImages.length} pages)...`);
+        try {
+          const pdfFilename = `lessons/lesson-${String(lessonIdx + 1).padStart(2, "0")}.pdf`;
+          const pdfDataUrl = await createPdfViaOffscreen(lessonImages, pdfFilename);
+          await savePdf(pdfDataUrl, pdfFilename);
+          log(`Saved ${pdfFilename}`);
+        } catch (err) {
+          logError(`Failed to create PDF for lesson ${lessonIdx + 1}`, err);
+        }
       }
     }
     if (isStopRequested()) {

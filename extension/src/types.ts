@@ -87,6 +87,18 @@ export interface MsgCrop {
   devicePixelRatio: number;
 }
 
+export interface MsgCreatePdf {
+  type: 'create-pdf';
+  imageDataUrls: string[];
+  filename: string;
+}
+
+export interface PdfResponse {
+  success: boolean;
+  pdfDataUrl?: string;
+  error?: string;
+}
+
 // Responses
 export interface PageInfoResponse {
   success: boolean;
@@ -119,4 +131,4 @@ export interface MsgStateUpdate {
 
 export type PopupMessage = MsgStart | MsgStop | MsgTestCapture | MsgGetState;
 export type ContentMessage = MsgGetPageInfo | MsgClickNext | MsgGoToFirst | MsgGetLessonCount;
-export type OffscreenMessage = MsgCrop;
+export type OffscreenMessage = MsgCrop | MsgCreatePdf;

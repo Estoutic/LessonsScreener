@@ -15,7 +15,7 @@ import { savePageImage, saveFullScreenshot } from './downloads';
 import { broadcastStateUpdate } from './messages';
 import type {
   PopupMessage, PageInfoResponse, ClickNextResponse, CropResponse,
-  DOMRectData, MsgCrop, LessonCountResponse,
+  DOMRectData, MsgCrop, MsgCreatePdf, PdfResponse, LessonCountResponse,
 } from './types';
 
 // ==================== Offscreen Document Management ====================
@@ -229,9 +229,39 @@ async function isNextDisabledMainWorld(tabId: number, lessonIndex: number = 0): 
   }
 }
 
+// ==================== PDF via Offscreen ====================
+
+async function createPdfViaOffscreen(imageDataUrls: string[], filename: string): Promise<string> {
+  await ensureOffscreen();
+
+  const message: MsgCreatePdf = {
+    type: 'create-pdf',
+    imageDataUrls,
+    filename,
+  };
+
+  const response: PdfResponse = await chrome.runtime.sendMessage(message);
+  if (!response.success || !response.pdfDataUrl) {
+    throw new Error(response.error || 'PDF creation failed');
+  }
+  return response.pdfDataUrl;
+}
+
+async function savePdf(pdfDataUrl: string, filename: string): Promise<number> {
+  return chrome.downloads.download({
+    url: pdfDataUrl,
+    filename,
+    saveAs: false,
+    conflictAction: 'uniquify',
+  });
+}
+
 // ==================== Capture Single Page ====================
 
-async function captureSinglePage(tabId: number, lessonIndex: number, globalPageCounter: number): Promise<boolean> {
+/**
+ * Capture a single page. Returns { isNextDisabled, croppedDataUrl }.
+ */
+async function captureSinglePage(tabId: number, lessonIndex: number, globalPageCounter: number): Promise<{ isLast: boolean; croppedDataUrl: string }> {
   // 1. Get page info from content script
   const pageInfoRes = await getPageInfo(tabId, lessonIndex);
   if (!pageInfoRes.success || !pageInfoRes.data) {
@@ -271,7 +301,7 @@ async function captureSinglePage(tabId: number, lessonIndex: number, globalPageC
   log(`Saved page-${String(globalPageCounter).padStart(3, '0')}.png`);
   broadcast();
 
-  return isNextDisabled;
+  return { isLast: isNextDisabled, croppedDataUrl };
 }
 
 // ==================== Main Loop ====================
@@ -334,10 +364,13 @@ async function runCaptureLoop(lessonTarget: 'all' | number = 'all'): Promise<voi
       await sleep(TIMING.postChangeDelay);
 
       let isLast = false;
+      const lessonImages: string[] = [];
 
       while (!isStopRequested()) {
         // Capture current page
-        isLast = await captureSinglePage(tabId, lessonIdx, globalPageCounter);
+        const result = await captureSinglePage(tabId, lessonIdx, globalPageCounter);
+        isLast = result.isLast;
+        lessonImages.push(result.croppedDataUrl);
         globalPageCounter++;
 
         if (isLast) {
@@ -391,6 +424,19 @@ async function runCaptureLoop(lessonTarget: 'all' | number = 'all'): Promise<voi
 
         await sleep(TIMING.postChangeDelay);
         await sleep(TIMING.interCycleDelay);
+      }
+
+      // Create PDF for this lesson
+      if (lessonImages.length > 0) {
+        log(`Creating PDF for lesson ${lessonIdx + 1} (${lessonImages.length} pages)...`);
+        try {
+          const pdfFilename = `lessons/lesson-${String(lessonIdx + 1).padStart(2, '0')}.pdf`;
+          const pdfDataUrl = await createPdfViaOffscreen(lessonImages, pdfFilename);
+          await savePdf(pdfDataUrl, pdfFilename);
+          log(`Saved ${pdfFilename}`);
+        } catch (err) {
+          logError(`Failed to create PDF for lesson ${lessonIdx + 1}`, err);
+        }
       }
     }
 
