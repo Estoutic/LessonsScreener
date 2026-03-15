@@ -12,7 +12,7 @@
   var elLogs = document.getElementById("logs");
   function render(state) {
     elStatus.textContent = state.status;
-    elStatus.className = `status-${state.status}`;
+    elStatus.className = `info-value status-${state.status}`;
     elPage.textContent = String(state.currentPage);
     elCaptured.textContent = String(state.totalCaptured);
     const isRunning = state.status === "running";
@@ -41,9 +41,10 @@
     }
     lessonSelect.options[0].textContent = `All lessons (${count})`;
   }
+  var btnScanLabel = btnScan.querySelector(".button_top");
   btnScan.addEventListener("click", async () => {
     btnScan.disabled = true;
-    btnScan.textContent = "...";
+    btnScanLabel.textContent = "...";
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab?.id)
@@ -84,7 +85,7 @@
     } catch (err) {
       console.error("[popup] Scan failed:", err);
     }
-    btnScan.textContent = "Scan";
+    btnScanLabel.textContent = "Scan";
     btnScan.disabled = false;
   });
   chrome.runtime.onMessage.addListener((message) => {

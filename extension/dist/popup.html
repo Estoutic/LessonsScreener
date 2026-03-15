@@ -4,107 +4,215 @@
   <meta charset="UTF-8">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
     body {
-      width: 340px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 13px;
-      padding: 12px;
-      background: #1a1a2e;
-      color: #e0e0e0;
+      width: 380px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      padding: 16px;
+      background: #e8e8e8;
+      color: #000;
     }
+
     h1 {
-      font-size: 15px;
-      margin-bottom: 10px;
-      color: #fff;
+      font-size: 22px;
+      margin-bottom: 14px;
+      color: #000;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      border-bottom: 4px solid #000;
+      padding-bottom: 8px;
     }
-    .controls {
-      display: flex;
-      gap: 6px;
-      margin-bottom: 12px;
-    }
-    button {
-      flex: 1;
-      padding: 8px 0;
+
+    /* ==================== Brutalist Button ==================== */
+    .btn {
+      --button_radius: 0.75em;
+      --button_color: #e8e8e8;
+      --button_outline_color: #000000;
+      --hover_offset: 4px;
+      --active_offset: 2px;
+      --shadow_color: rgba(0, 0, 0, 0.5);
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      font-weight: bold;
       border: none;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 600;
+      border-radius: var(--button_radius);
+      background: var(--button_outline_color);
+      position: relative;
       cursor: pointer;
-      transition: opacity 0.15s;
+      transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+      overflow: hidden;
+      text-transform: uppercase;
+      letter-spacing: 1px;
     }
-    button:disabled {
-      opacity: 0.4;
+    .btn .button_top {
+      display: block;
+      box-sizing: border-box;
+      border: 4px solid var(--button_outline_color);
+      border-radius: var(--button_radius);
+      padding: 0.6em 1em;
+      background: var(--button_color);
+      color: var(--button_outline_color);
+      transform: translateY(-0.2em);
+      transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+    }
+    .btn:hover {
+      box-shadow: var(--hover_offset) var(--hover_offset) 0 var(--shadow_color);
+      transform: translate(
+        calc(-1 * var(--hover_offset)),
+        calc(-1 * var(--hover_offset))
+      );
+    }
+    .btn:hover .button_top {
+      transform: translateY(-0.33em);
+    }
+    .btn:active .button_top {
+      transform: translateY(0);
+    }
+    .btn:active {
+      box-shadow: var(--active_offset) var(--active_offset) 0 var(--shadow_color);
+      transform: translate(
+        calc(-1 * var(--active_offset)),
+        calc(-1 * var(--active_offset))
+      );
+    }
+    .btn:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--button_outline_color),
+        inset 0 0 0 2px var(--button_color);
+    }
+    .btn:disabled {
+      opacity: 0.35;
       cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
     }
-    #btn-start {
-      background: #00b894;
-      color: #fff;
+    .btn:disabled .button_top {
+      transform: none;
     }
-    #btn-stop {
-      background: #e74c3c;
-      color: #fff;
+    .btn:disabled:hover {
+      box-shadow: none;
+      transform: none;
+      animation: none;
     }
-    #btn-test {
-      background: #636e72;
-      color: #fff;
+    .btn::before,
+    .btn::after {
+      content: attr(data-content);
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--button_color);
+      color: var(--button_outline_color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+      overflow: hidden;
+      border-radius: var(--button_radius);
+      opacity: 0;
     }
+    .btn:active::before,
+    .btn:active::after {
+      transform: none;
+    }
+    @keyframes brutalistShake {
+      0%, 100% { transform: translateX(0) translateY(0); }
+      25% { transform: translateX(-2px) translateY(-2px) rotate(-1deg); }
+      75% { transform: translateX(2px) translateY(2px) rotate(1deg); }
+    }
+    .btn:hover:not(:disabled) {
+      animation: brutalistShake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    }
+
+    /* Color variants */
+    .btn--start { --button_color: #55efc4; --button_outline_color: #000; }
+    .btn--stop { --button_color: #ff7675; --button_outline_color: #000; }
+    .btn--secondary { --button_color: #dfe6e9; --button_outline_color: #000; }
+
+    /* ==================== Layout ==================== */
     .lesson-row {
       display: flex;
-      gap: 6px;
-      align-items: center;
-      margin-bottom: 12px;
+      gap: 8px;
+      align-items: stretch;
+      margin-bottom: 14px;
     }
     .lesson-row select {
       flex: 1;
-      padding: 6px 8px;
-      border: 1px solid #2d2d44;
-      border-radius: 4px;
-      background: #0f0f23;
-      color: #e0e0e0;
-      font-size: 12px;
-    }
-    #btn-scan {
-      padding: 6px 12px;
-      border: none;
-      border-radius: 4px;
-      background: #636e72;
-      color: #fff;
-      font-size: 11px;
-      font-weight: 600;
+      padding: 8px 10px;
+      border: 4px solid #000;
+      border-radius: 0.75em;
+      background: #fff;
+      color: #000;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      font-weight: bold;
       cursor: pointer;
-      white-space: nowrap;
+      appearance: auto;
     }
-    #btn-scan:disabled {
-      opacity: 0.4;
+    .lesson-row select:disabled {
+      opacity: 0.35;
       cursor: not-allowed;
+    }
+    .lesson-row .btn {
+      flex-shrink: 0;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .controls .btn {
+      flex: 1;
+    }
+
+    /* ==================== Info Panel ==================== */
+    .info-panel {
+      border: 4px solid #000;
+      border-radius: 0.75em;
+      background: #fff;
+      margin-bottom: 12px;
+      overflow: hidden;
     }
     .info-row {
       display: flex;
       justify-content: space-between;
-      padding: 4px 0;
-      border-bottom: 1px solid #2d2d44;
+      padding: 6px 10px;
+      border-bottom: 2px solid #000;
+    }
+    .info-row:last-child {
+      border-bottom: none;
     }
     .info-label {
-      color: #888;
+      font-weight: bold;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 1px;
+      color: #555;
     }
-    .status-idle { color: #888; }
+    .info-value {
+      font-weight: bold;
+    }
+    .status-idle { color: #636e72; }
     .status-running { color: #00b894; }
     .status-stopped { color: #fdcb6e; }
-    .status-completed { color: #74b9ff; }
-    .status-error { color: #e74c3c; }
+    .status-completed { color: #0984e3; }
+    .status-error { color: #d63031; }
+
+    /* ==================== Logs ==================== */
     .logs-container {
       margin-top: 10px;
-      background: #0f0f23;
-      border-radius: 4px;
-      padding: 6px;
+      background: #000;
+      border: 4px solid #000;
+      border-radius: 0.75em;
+      padding: 8px;
       max-height: 180px;
       overflow-y: auto;
-      font-family: 'SF Mono', 'Menlo', monospace;
-      font-size: 10px;
-      line-height: 1.5;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      line-height: 1.6;
     }
     .log-line {
-      color: #b0b0cc;
+      color: #55efc4;
       word-break: break-all;
     }
   </style>
@@ -116,26 +224,36 @@
     <select id="lesson-select">
       <option value="all">All lessons</option>
     </select>
-    <button id="btn-scan">Scan</button>
+    <button id="btn-scan" class="btn btn--secondary">
+      <span class="button_top">Scan</span>
+    </button>
   </div>
 
   <div class="controls">
-    <button id="btn-start">Start</button>
-    <button id="btn-stop" disabled>Stop</button>
-    <button id="btn-test">Test</button>
+    <button id="btn-start" class="btn btn--start">
+      <span class="button_top">Start</span>
+    </button>
+    <button id="btn-stop" class="btn btn--stop" disabled>
+      <span class="button_top">Stop</span>
+    </button>
+    <button id="btn-test" class="btn btn--secondary">
+      <span class="button_top">Test</span>
+    </button>
   </div>
 
-  <div class="info-row">
-    <span class="info-label">Status</span>
-    <span id="status" class="status-idle">idle</span>
-  </div>
-  <div class="info-row">
-    <span class="info-label">Current page</span>
-    <span id="page-count">0</span>
-  </div>
-  <div class="info-row">
-    <span class="info-label">Captured</span>
-    <span id="captured-count">0</span>
+  <div class="info-panel">
+    <div class="info-row">
+      <span class="info-label">Status</span>
+      <span id="status" class="info-value status-idle">idle</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Current page</span>
+      <span id="page-count" class="info-value">0</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Captured</span>
+      <span id="captured-count" class="info-value">0</span>
+    </div>
   </div>
 
   <div class="logs-container" id="logs">

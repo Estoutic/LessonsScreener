@@ -22,7 +22,7 @@ const elLogs = document.getElementById('logs') as HTMLDivElement;
 
 function render(state: ProcessState): void {
   elStatus.textContent = state.status;
-  elStatus.className = `status-${state.status}`;
+  elStatus.className = `info-value status-${state.status}`;
   elPage.textContent = String(state.currentPage);
   elCaptured.textContent = String(state.totalCaptured);
 
@@ -67,9 +67,11 @@ function populateLessonSelect(count: number, titles: string[] = []): void {
   lessonSelect.options[0].textContent = `All lessons (${count})`;
 }
 
+const btnScanLabel = btnScan.querySelector('.button_top') as HTMLSpanElement;
+
 btnScan.addEventListener('click', async () => {
   btnScan.disabled = true;
-  btnScan.textContent = '...';
+  btnScanLabel.textContent = '...';
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -113,7 +115,7 @@ btnScan.addEventListener('click', async () => {
     console.error('[popup] Scan failed:', err);
   }
 
-  btnScan.textContent = 'Scan';
+  btnScanLabel.textContent = 'Scan';
   btnScan.disabled = false;
 });
 
