@@ -59,6 +59,38 @@ async function getLessonCount(tabId: number): Promise<number> {
   return 1;
 }
 
+/**
+ * Get lesson titles from the page (h5 elements above each PDF viewer).
+ * Returns an array of titles, one per lesson.
+ */
+async function getLessonTitles(tabId: number): Promise<string[]> {
+  try {
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      func: (pageNumSelector: string) => {
+        const pageNumButtons = document.querySelectorAll(pageNumSelector);
+        return Array.from(pageNumButtons).map((btn) => {
+          // Walk up from the pagination button to find the enclosing card/section
+          let el: HTMLElement | null = btn as HTMLElement;
+          while (el) {
+            el = el.parentElement;
+            if (!el) break;
+            // Look for an h5 title within this ancestor
+            const h5 = el.querySelector('h5.Title-module__title__tyFfb');
+            if (h5) return h5.textContent?.trim() || '';
+          }
+          return '';
+        });
+      },
+      args: ['button[data-testid="page-number"]'],
+    });
+    return (result.result as string[]) || [];
+  } catch {
+    return [];
+  }
+}
+
 // ==================== Main World Execution ====================
 
 const MAIN_WORLD_SELECTORS = {
@@ -325,8 +357,9 @@ async function runCaptureLoop(lessonTarget: 'all' | number = 'all'): Promise<voi
 
     await sleep(500);
 
-    // Get total number of lessons on the page
+    // Get total number of lessons and their titles
     const totalLessons = await getLessonCount(tabId);
+    const lessonTitles = await getLessonTitles(tabId);
     log(`Found ${totalLessons} lesson(s) on the page`);
 
     // Determine which lessons to process
@@ -428,9 +461,17 @@ async function runCaptureLoop(lessonTarget: 'all' | number = 'all'): Promise<voi
 
       // Create PDF for this lesson
       if (lessonImages.length > 0) {
-        log(`Creating PDF for lesson ${lessonIdx + 1} (${lessonImages.length} pages)...`);
+        // Use page title if available, otherwise fallback to lesson number
+        const rawTitle = lessonTitles[lessonIdx] || '';
+        const sanitized = rawTitle
+          .replace(/\.pdf$/i, '')         // remove .pdf suffix if present
+          .replace(/[<>:"/\\|?*]/g, '_')  // replace illegal filename chars
+          .trim();
+        const pdfName = sanitized || `lesson-${String(lessonIdx + 1).padStart(2, '0')}`;
+        const pdfFilename = `lessons/${pdfName}.pdf`;
+
+        log(`Creating PDF "${pdfName}" (${lessonImages.length} pages)...`);
         try {
-          const pdfFilename = `lessons/lesson-${String(lessonIdx + 1).padStart(2, '0')}.pdf`;
           const pdfDataUrl = await createPdfViaOffscreen(lessonImages, pdfFilename);
           await savePdf(pdfDataUrl, pdfFilename);
           log(`Saved ${pdfFilename}`);

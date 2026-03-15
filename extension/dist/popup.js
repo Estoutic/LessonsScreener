@@ -28,14 +28,15 @@
   function escapeHtml(str) {
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
-  function populateLessonSelect(count) {
+  function populateLessonSelect(count, titles = []) {
     while (lessonSelect.options.length > 1) {
       lessonSelect.remove(1);
     }
     for (let i = 1; i <= count; i++) {
       const opt = document.createElement("option");
       opt.value = String(i);
-      opt.textContent = `Lesson ${i}`;
+      const title = titles[i - 1]?.replace(/\.pdf$/i, "").trim();
+      opt.textContent = title || `Lesson ${i}`;
       lessonSelect.appendChild(opt);
     }
     lessonSelect.options[0].textContent = `All lessons (${count})`;
@@ -55,7 +56,30 @@
       await new Promise((r) => setTimeout(r, 300));
       const res = await chrome.tabs.sendMessage(tab.id, { type: "get-lesson-count" });
       if (res?.success && typeof res.count === "number") {
-        populateLessonSelect(res.count);
+        let titles = [];
+        try {
+          const [titleResult] = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => {
+              const pageNumButtons = document.querySelectorAll('button[data-testid="page-number"]');
+              return Array.from(pageNumButtons).map((btn) => {
+                let el = btn;
+                while (el) {
+                  el = el.parentElement;
+                  if (!el)
+                    break;
+                  const h5 = el.querySelector("h5.Title-module__title__tyFfb");
+                  if (h5)
+                    return h5.textContent?.trim() || "";
+                }
+                return "";
+              });
+            }
+          });
+          titles = titleResult.result || [];
+        } catch {
+        }
+        populateLessonSelect(res.count, titles);
       }
     } catch (err) {
       console.error("[popup] Scan failed:", err);

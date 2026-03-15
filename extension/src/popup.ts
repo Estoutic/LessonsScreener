@@ -51,7 +51,7 @@ function escapeHtml(str: string): string {
 
 // ==================== Lesson Scanning ====================
 
-function populateLessonSelect(count: number): void {
+function populateLessonSelect(count: number, titles: string[] = []): void {
   // Keep "All lessons" option, remove the rest
   while (lessonSelect.options.length > 1) {
     lessonSelect.remove(1);
@@ -59,7 +59,8 @@ function populateLessonSelect(count: number): void {
   for (let i = 1; i <= count; i++) {
     const opt = document.createElement('option');
     opt.value = String(i);
-    opt.textContent = `Lesson ${i}`;
+    const title = titles[i - 1]?.replace(/\.pdf$/i, '').trim();
+    opt.textContent = title || `Lesson ${i}`;
     lessonSelect.appendChild(opt);
   }
   // Update "All" label with count
@@ -85,7 +86,28 @@ btnScan.addEventListener('click', async () => {
 
     const res = await chrome.tabs.sendMessage(tab.id, { type: 'get-lesson-count' });
     if (res?.success && typeof res.count === 'number') {
-      populateLessonSelect(res.count);
+      // Fetch titles via scripting API
+      let titles: string[] = [];
+      try {
+        const [titleResult] = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            const pageNumButtons = document.querySelectorAll('button[data-testid="page-number"]');
+            return Array.from(pageNumButtons).map((btn) => {
+              let el: HTMLElement | null = btn as HTMLElement;
+              while (el) {
+                el = el.parentElement;
+                if (!el) break;
+                const h5 = el.querySelector('h5.Title-module__title__tyFfb');
+                if (h5) return h5.textContent?.trim() || '';
+              }
+              return '';
+            });
+          },
+        });
+        titles = (titleResult.result as string[]) || [];
+      } catch { /* ignore */ }
+      populateLessonSelect(res.count, titles);
     }
   } catch (err) {
     console.error('[popup] Scan failed:', err);

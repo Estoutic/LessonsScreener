@@ -168,6 +168,33 @@ async function getLessonCount(tabId) {
     return res.count;
   return 1;
 }
+async function getLessonTitles(tabId) {
+  try {
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: (pageNumSelector) => {
+        const pageNumButtons = document.querySelectorAll(pageNumSelector);
+        return Array.from(pageNumButtons).map((btn) => {
+          let el = btn;
+          while (el) {
+            el = el.parentElement;
+            if (!el)
+              break;
+            const h5 = el.querySelector("h5.Title-module__title__tyFfb");
+            if (h5)
+              return h5.textContent?.trim() || "";
+          }
+          return "";
+        });
+      },
+      args: ['button[data-testid="page-number"]']
+    });
+    return result.result || [];
+  } catch {
+    return [];
+  }
+}
 var MAIN_WORLD_SELECTORS = {
   pageNumberButton: 'button[data-testid="page-number"]',
   nextButton: 'button[data-testid="page-number"] + button',
@@ -373,6 +400,7 @@ async function runCaptureLoop(lessonTarget = "all") {
     });
     await sleep(500);
     const totalLessons = await getLessonCount(tabId);
+    const lessonTitles = await getLessonTitles(tabId);
     log(`Found ${totalLessons} lesson(s) on the page`);
     let startLesson;
     let endLesson;
@@ -452,9 +480,12 @@ async function runCaptureLoop(lessonTarget = "all") {
         await sleep(TIMING.interCycleDelay);
       }
       if (lessonImages.length > 0) {
-        log(`Creating PDF for lesson ${lessonIdx + 1} (${lessonImages.length} pages)...`);
+        const rawTitle = lessonTitles[lessonIdx] || "";
+        const sanitized = rawTitle.replace(/\.pdf$/i, "").replace(/[<>:"/\\|?*]/g, "_").trim();
+        const pdfName = sanitized || `lesson-${String(lessonIdx + 1).padStart(2, "0")}`;
+        const pdfFilename = `lessons/${pdfName}.pdf`;
+        log(`Creating PDF "${pdfName}" (${lessonImages.length} pages)...`);
         try {
-          const pdfFilename = `lessons/lesson-${String(lessonIdx + 1).padStart(2, "0")}.pdf`;
           const pdfDataUrl = await createPdfViaOffscreen(lessonImages, pdfFilename);
           await savePdf(pdfDataUrl, pdfFilename);
           log(`Saved ${pdfFilename}`);
