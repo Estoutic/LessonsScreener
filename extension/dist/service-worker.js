@@ -25,7 +25,7 @@ var TIMING = {
 };
 var DEBUG = {
   /** Save full (uncropped) screenshots alongside cropped ones */
-  saveFullScreenshot: true,
+  saveFullScreenshot: false,
   /** Log verbose messages */
   verbose: true
 };
