@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Screener",
+  "version": "0.1.0",
+  "description": "Capture document pages as screenshots",
+
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads",
+    "offscreen",
+    "storage"
+  ],
+
+  "host_permissions": [
+    "https://kiber-one.pro/*"
+  ],
+
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Screener"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://kiber-one.pro/*"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "icons": {
+    "128": "assets/icon128.png"
+  }
+}
