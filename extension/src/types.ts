@@ -31,6 +31,8 @@ export interface DOMRectData {
 // Popup → Service Worker
 export interface MsgStart {
   type: 'start';
+  /** Which lesson to capture: 'all' or 1-based lesson number */
+  lessonTarget?: 'all' | number;
 }
 
 export interface MsgStop {
@@ -48,14 +50,27 @@ export interface MsgGetState {
 // Service Worker → Content Script
 export interface MsgGetPageInfo {
   type: 'get-page-info';
+  lessonIndex?: number;
 }
 
 export interface MsgClickNext {
   type: 'click-next';
+  lessonIndex?: number;
 }
 
 export interface MsgGoToFirst {
   type: 'go-to-first';
+  lessonIndex?: number;
+}
+
+export interface MsgGetLessonCount {
+  type: 'get-lesson-count';
+}
+
+export interface LessonCountResponse {
+  success: boolean;
+  count?: number;
+  error?: string;
 }
 
 export interface GoToFirstResponse {
@@ -103,5 +118,5 @@ export interface MsgStateUpdate {
 }
 
 export type PopupMessage = MsgStart | MsgStop | MsgTestCapture | MsgGetState;
-export type ContentMessage = MsgGetPageInfo | MsgClickNext | MsgGoToFirst;
+export type ContentMessage = MsgGetPageInfo | MsgClickNext | MsgGoToFirst | MsgGetLessonCount;
 export type OffscreenMessage = MsgCrop;

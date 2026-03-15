@@ -159,41 +159,48 @@ async function getActiveTabId() {
     throw new Error("No active tab found");
   return tab.id;
 }
-async function getPageInfo(tabId) {
-  return chrome.tabs.sendMessage(tabId, { type: "get-page-info" });
+async function getPageInfo(tabId, lessonIndex = 0) {
+  return chrome.tabs.sendMessage(tabId, { type: "get-page-info", lessonIndex });
 }
-async function clickNextInMainWorld(tabId) {
+async function getLessonCount(tabId) {
+  const res = await chrome.tabs.sendMessage(tabId, { type: "get-lesson-count" });
+  if (res.success && typeof res.count === "number")
+    return res.count;
+  return 1;
+}
+var MAIN_WORLD_SELECTORS = {
+  pageNumberButton: 'button[data-testid="page-number"]',
+  nextButton: 'button[data-testid="page-number"] + button',
+  toolbarContainer: "div.MuiBox-root.css-5ax1kt",
+  prevButton: "div.MuiBox-root.css-5ax1kt > button:nth-of-type(1)"
+};
+async function clickNextInMainWorld(tabId, lessonIndex = 0) {
   const [result] = await chrome.scripting.executeScript({
     target: { tabId },
     world: "MAIN",
-    func: (selectors) => {
+    func: (selectors, lessonIdx) => {
+      function getPageNumBtn() {
+        const all = document.querySelectorAll(selectors.pageNumberButton);
+        return all[lessonIdx] || null;
+      }
       function findNextButton() {
-        let btn2 = document.querySelector(selectors.nextButton);
-        if (btn2)
-          return btn2;
-        const pageNumBtn = document.querySelector(selectors.pageNumberButton);
-        if (pageNumBtn) {
-          const parent = pageNumBtn.parentElement;
-          if (parent) {
-            const buttons = parent.querySelectorAll("button");
-            btn2 = buttons[buttons.length - 1];
-            if (btn2 && btn2 !== pageNumBtn)
-              return btn2;
-          }
-          const sibling = pageNumBtn.nextElementSibling;
-          if (sibling && sibling.tagName === "BUTTON")
-            return sibling;
-        }
-        const toolbar = document.querySelector(selectors.toolbarContainer);
-        if (toolbar) {
-          const buttons = toolbar.querySelectorAll("button");
-          if (buttons.length >= 3)
-            return buttons[2];
+        const pageNumBtn = getPageNumBtn();
+        if (!pageNumBtn)
+          return null;
+        const sibling = pageNumBtn.nextElementSibling;
+        if (sibling && sibling.tagName === "BUTTON")
+          return sibling;
+        const parent = pageNumBtn.parentElement;
+        if (parent) {
+          const buttons = parent.querySelectorAll("button");
+          const btn2 = buttons[buttons.length - 1];
+          if (btn2 && btn2 !== pageNumBtn)
+            return btn2;
         }
         return null;
       }
       function readPageNumber() {
-        const btn2 = document.querySelector(selectors.pageNumberButton);
+        const btn2 = getPageNumBtn();
         if (!btn2)
           return 0;
         const num = parseInt(btn2.textContent?.trim() ?? "", 10);
@@ -207,25 +214,29 @@ async function clickNextInMainWorld(tabId) {
       const isLast = btn.disabled === true;
       return { clicked: true, pageNumber, isLast };
     },
-    args: [{ pageNumberButton: 'button[data-testid="page-number"]', nextButton: 'button[data-testid="page-number"] + button', toolbarContainer: "div.MuiBox-root.css-5ax1kt" }]
+    args: [{ pageNumberButton: MAIN_WORLD_SELECTORS.pageNumberButton }, lessonIndex]
   });
   return result.result;
 }
-async function goToFirstInMainWorld(tabId) {
+async function goToFirstInMainWorld(tabId, lessonIndex = 0) {
   const MAX_CLICKS = 200;
   for (let i = 0; i < MAX_CLICKS; i++) {
     const [result] = await chrome.scripting.executeScript({
       target: { tabId },
       world: "MAIN",
-      func: (selectors) => {
+      func: (selectors, lessonIdx) => {
+        function getPageNumBtn() {
+          const all = document.querySelectorAll(selectors.pageNumberButton);
+          return all[lessonIdx] || null;
+        }
         function readPageNumber() {
-          const btn = document.querySelector(selectors.pageNumberButton);
+          const btn = getPageNumBtn();
           if (!btn)
             return 0;
           const num = parseInt(btn.textContent?.trim() ?? "", 10);
           return isNaN(num) ? 0 : num;
         }
-        const pageNumBtn = document.querySelector(selectors.pageNumberButton);
+        const pageNumBtn = getPageNumBtn();
         let prevBtn = null;
         if (pageNumBtn) {
           const sibling = pageNumBtn.previousElementSibling;
@@ -240,9 +251,6 @@ async function goToFirstInMainWorld(tabId) {
             }
           }
         }
-        if (!prevBtn) {
-          prevBtn = document.querySelector(selectors.prevButton);
-        }
         if (!prevBtn)
           return { atFirst: true, pageNumber: readPageNumber(), noPrevBtn: true };
         if (prevBtn.disabled)
@@ -250,7 +258,7 @@ async function goToFirstInMainWorld(tabId) {
         prevBtn.click();
         return { atFirst: false, pageNumber: readPageNumber(), noPrevBtn: false };
       },
-      args: [{ pageNumberButton: 'button[data-testid="page-number"]', prevButton: "div.MuiBox-root.css-5ax1kt > button:nth-of-type(1)" }]
+      args: [{ pageNumberButton: MAIN_WORLD_SELECTORS.pageNumberButton }, lessonIndex]
     });
     const res = result.result;
     if (res.atFirst) {
@@ -277,43 +285,40 @@ async function cropViaOffscreen(dataUrl, rect, devicePixelRatio) {
 function broadcast() {
   broadcastStateUpdate(getState());
 }
-async function isNextDisabledMainWorld(tabId) {
+async function isNextDisabledMainWorld(tabId, lessonIndex = 0) {
   try {
     const [result] = await chrome.scripting.executeScript({
       target: { tabId },
       world: "MAIN",
-      func: (selectors) => {
-        let btn = document.querySelector(selectors.nextButton);
-        if (!btn) {
-          const pageNumBtn = document.querySelector(selectors.pageNumberButton);
-          if (pageNumBtn) {
-            const sibling = pageNumBtn.nextElementSibling;
-            if (sibling && sibling.tagName === "BUTTON")
-              btn = sibling;
-          }
-        }
-        if (!btn)
+      func: (selectors, lessonIdx) => {
+        const all = document.querySelectorAll(selectors.pageNumberButton);
+        const pageNumBtn = all[lessonIdx];
+        if (!pageNumBtn)
           return true;
-        return btn.disabled === true;
+        const sibling = pageNumBtn.nextElementSibling;
+        if (sibling && sibling.tagName === "BUTTON") {
+          return sibling.disabled === true;
+        }
+        return true;
       },
-      args: [{ nextButton: 'button[data-testid="page-number"] + button', pageNumberButton: 'button[data-testid="page-number"]', toolbarContainer: "div.MuiBox-root.css-5ax1kt" }]
+      args: [{ pageNumberButton: MAIN_WORLD_SELECTORS.pageNumberButton }, lessonIndex]
     });
     return result.result;
   } catch {
     return true;
   }
 }
-async function captureSinglePage(tabId) {
-  const pageInfoRes = await getPageInfo(tabId);
+async function captureSinglePage(tabId, lessonIndex, globalPageCounter) {
+  const pageInfoRes = await getPageInfo(tabId, lessonIndex);
   if (!pageInfoRes.success || !pageInfoRes.data) {
     throw new Error(pageInfoRes.error || "Failed to get page info");
   }
   const { pageNumber, rect, devicePixelRatio } = pageInfoRes.data;
-  const isNextDisabled = await isNextDisabledMainWorld(tabId);
+  const isNextDisabled = await isNextDisabledMainWorld(tabId, lessonIndex);
   const effectivePage = pageNumber || getState().currentPage + 1;
   setCurrentPage(effectivePage);
   broadcast();
-  log(`Capturing page ${effectivePage} (dpr=${devicePixelRatio})`);
+  log(`Lesson ${lessonIndex + 1}, capturing page ${effectivePage} (dpr=${devicePixelRatio})`);
   const cropRect = rect || FALLBACK_CROP;
   if (!rect) {
     log("DOM rect not found, using fallback coordinates");
@@ -321,17 +326,17 @@ async function captureSinglePage(tabId) {
   log(`Crop rect: x=${cropRect.x} y=${cropRect.y} w=${cropRect.width} h=${cropRect.height} (source: ${rect ? "DOM" : "fallback"})`);
   const fullScreenshot = await captureVisibleTab();
   if (DEBUG.saveFullScreenshot) {
-    await saveFullScreenshot(fullScreenshot, effectivePage);
-    log(`Saved full screenshot for page ${effectivePage}`);
+    await saveFullScreenshot(fullScreenshot, globalPageCounter);
+    log(`Saved full screenshot for global page ${globalPageCounter}`);
   }
   const croppedDataUrl = await cropViaOffscreen(fullScreenshot, cropRect, devicePixelRatio);
-  await savePageImage(croppedDataUrl, effectivePage);
+  await savePageImage(croppedDataUrl, globalPageCounter);
   incrementCaptured();
-  log(`Saved page-${String(effectivePage).padStart(3, "0")}.png`);
+  log(`Saved page-${String(globalPageCounter).padStart(3, "0")}.png`);
   broadcast();
   return isNextDisabled;
 }
-async function runCaptureLoop() {
+async function runCaptureLoop(lessonTarget = "all") {
   clearStopFlag();
   clearLogs();
   resetState();
@@ -346,67 +351,90 @@ async function runCaptureLoop() {
     }).catch(() => {
     });
     await sleep(500);
-    log("Navigating to first page (main world)...");
-    const goRes = await goToFirstInMainWorld(tabId);
-    if (goRes.success) {
-      log(`On page ${goRes.pageNumber ?? 1}`);
+    const totalLessons = await getLessonCount(tabId);
+    log(`Found ${totalLessons} lesson(s) on the page`);
+    let startLesson;
+    let endLesson;
+    if (lessonTarget === "all") {
+      startLesson = 0;
+      endLesson = totalLessons;
     } else {
-      log(`Warning: go-to-first failed: ${goRes.error}. Continuing from current page.`);
-    }
-    await sleep(TIMING.postChangeDelay);
-    let isLast = false;
-    while (!isStopRequested()) {
-      isLast = await captureSinglePage(tabId);
-      if (isLast) {
-        log("Reached last page");
-        break;
+      startLesson = lessonTarget - 1;
+      endLesson = lessonTarget;
+      if (startLesson < 0 || startLesson >= totalLessons) {
+        throw new Error(`Lesson ${lessonTarget} not found (total: ${totalLessons})`);
       }
+      log(`Capturing only lesson ${lessonTarget}`);
+    }
+    let globalPageCounter = 1;
+    for (let lessonIdx = startLesson; lessonIdx < endLesson; lessonIdx++) {
       if (isStopRequested())
         break;
-      log("Clicking Next (main world)...");
-      const oldPage = getState().currentPage;
-      const nextRes = await clickNextInMainWorld(tabId);
-      if (!nextRes.clicked) {
-        if (nextRes.isLast) {
-          log("Next reports last page");
-          break;
-        }
-        throw new Error(nextRes.error || "Failed to click next");
-      }
-      await sleep(TIMING.pageChangePoll);
-      const deadline = Date.now() + TIMING.pageChangeTimeout;
-      let newPage = oldPage;
-      while (Date.now() < deadline) {
-        try {
-          const info = await getPageInfo(tabId);
-          if (info.success && info.data) {
-            if (info.data.pageNumber > 0 && info.data.pageNumber !== oldPage) {
-              newPage = info.data.pageNumber;
-              break;
-            }
-          }
-        } catch {
-        }
-        await sleep(TIMING.pageChangePoll);
-      }
-      if (newPage === oldPage) {
-        if (nextRes.isLast) {
-          log("Next became disabled after click \u2014 last page");
-          break;
-        }
-        log(`Warning: page number didn't change (still ${oldPage}), continuing anyway`);
+      log(`--- Processing lesson ${lessonIdx + 1} of ${totalLessons} ---`);
+      log(`Navigating to first page of lesson ${lessonIdx + 1} (main world)...`);
+      const goRes = await goToFirstInMainWorld(tabId, lessonIdx);
+      if (goRes.success) {
+        log(`Lesson ${lessonIdx + 1}: on page ${goRes.pageNumber ?? 1}`);
       } else {
-        log(`Page changed to ${newPage}`);
+        log(`Warning: go-to-first failed for lesson ${lessonIdx + 1}: ${goRes.error}. Continuing from current page.`);
       }
       await sleep(TIMING.postChangeDelay);
-      await sleep(TIMING.interCycleDelay);
+      let isLast = false;
+      while (!isStopRequested()) {
+        isLast = await captureSinglePage(tabId, lessonIdx, globalPageCounter);
+        globalPageCounter++;
+        if (isLast) {
+          log(`Lesson ${lessonIdx + 1}: reached last page`);
+          break;
+        }
+        if (isStopRequested())
+          break;
+        log(`Lesson ${lessonIdx + 1}: clicking Next (main world)...`);
+        const oldPage = getState().currentPage;
+        const nextRes = await clickNextInMainWorld(tabId, lessonIdx);
+        if (!nextRes.clicked) {
+          if (nextRes.isLast) {
+            log(`Lesson ${lessonIdx + 1}: Next reports last page`);
+            break;
+          }
+          throw new Error(nextRes.error || "Failed to click next");
+        }
+        await sleep(TIMING.pageChangePoll);
+        const deadline = Date.now() + TIMING.pageChangeTimeout;
+        let newPage = oldPage;
+        while (Date.now() < deadline) {
+          try {
+            const info = await getPageInfo(tabId, lessonIdx);
+            if (info.success && info.data) {
+              if (info.data.pageNumber > 0 && info.data.pageNumber !== oldPage) {
+                newPage = info.data.pageNumber;
+                break;
+              }
+            }
+          } catch {
+          }
+          await sleep(TIMING.pageChangePoll);
+        }
+        if (newPage === oldPage) {
+          if (nextRes.isLast) {
+            log(`Lesson ${lessonIdx + 1}: Next became disabled after click \u2014 last page`);
+            break;
+          }
+          log(`Warning: page number didn't change (still ${oldPage}), continuing anyway`);
+        } else {
+          log(`Lesson ${lessonIdx + 1}: page changed to ${newPage}`);
+        }
+        await sleep(TIMING.postChangeDelay);
+        await sleep(TIMING.interCycleDelay);
+      }
     }
     if (isStopRequested()) {
       setStatus("stopped");
       log("Process stopped by user");
     } else {
       setStatus("completed");
-      log(`Completed! Captured ${getState().totalCaptured} pages`);
+      const lessonLabel = lessonTarget === "all" ? `${totalLessons} lesson(s)` : `lesson ${lessonTarget}`;
+      log(`Completed! Captured ${getState().totalCaptured} pages from ${lessonLabel}`);
     }
   } catch (err) {
     logError("Capture loop failed", err);
@@ -425,7 +453,7 @@ async function testCapture() {
     }).catch(() => {
     });
     await sleep(500);
-    await captureSinglePage(tabId);
+    await captureSinglePage(tabId, 0, 1);
     setStatus("idle");
     log("Test capture completed");
   } catch (err) {
@@ -438,7 +466,7 @@ chrome.runtime.onMessage.addListener(
   (message, _sender, sendResponse) => {
     switch (message.type) {
       case "start":
-        runCaptureLoop();
+        runCaptureLoop(message.lessonTarget ?? "all");
         sendResponse({ ok: true });
         return false;
       case "stop":

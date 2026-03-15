@@ -33,6 +33,13 @@
   };
 
   // src/dom-adapter.ts
+  function getPageNumberButton(lessonIndex) {
+    const all = document.querySelectorAll(SELECTORS.pageNumberButton);
+    return all[lessonIndex] || null;
+  }
+  function getLessonCount() {
+    return document.querySelectorAll(SELECTORS.pageNumberButton).length;
+  }
   function getReactProps(el) {
     const key = Object.keys(el).find(
       (k) => k.startsWith("__reactFiber$") || k.startsWith("__reactInternalInstance$")
@@ -100,50 +107,37 @@
     el.dispatchEvent(new MouseEvent("click", common));
     console.log(`[screener] simulateClick on <${el.tagName}> at (${cx.toFixed(0)}, ${cy.toFixed(0)})`);
   }
-  function readPageNumber() {
-    const btn = document.querySelector(SELECTORS.pageNumberButton);
+  function readPageNumber(lessonIndex) {
+    const btn = getPageNumberButton(lessonIndex);
     if (!btn)
       return 0;
     const text = btn.textContent?.trim() ?? "";
     const num = parseInt(text, 10);
     return isNaN(num) ? 0 : num;
   }
-  function findNextButton() {
-    let btn = document.querySelector(SELECTORS.nextButton);
-    if (btn) {
-      console.log("[screener] Next button found via adjacent sibling");
-      return btn;
-    }
-    const pageNumBtn = document.querySelector(SELECTORS.pageNumberButton);
+  function findNextButton(lessonIndex) {
+    const pageNumBtn = getPageNumberButton(lessonIndex);
     if (pageNumBtn) {
+      const sibling = pageNumBtn.nextElementSibling;
+      if (sibling && sibling.tagName === "BUTTON") {
+        console.log(`[screener] Next button found for lesson ${lessonIndex} via nextElementSibling`);
+        return sibling;
+      }
       const parent = pageNumBtn.parentElement;
       if (parent) {
         const buttons = parent.querySelectorAll("button");
-        btn = buttons[buttons.length - 1];
+        const btn = buttons[buttons.length - 1];
         if (btn && btn !== pageNumBtn) {
-          console.log("[screener] Next button found via parent traversal");
+          console.log(`[screener] Next button found for lesson ${lessonIndex} via parent traversal`);
           return btn;
         }
       }
-      const sibling = pageNumBtn.nextElementSibling;
-      if (sibling && sibling.tagName === "BUTTON") {
-        console.log("[screener] Next button found via nextElementSibling");
-        return sibling;
-      }
     }
-    const toolbar = document.querySelector(SELECTORS.toolbarContainer);
-    if (toolbar) {
-      const buttons = toolbar.querySelectorAll("button");
-      if (buttons.length >= 3) {
-        console.log("[screener] Next button found via toolbar fallback");
-        return buttons[2];
-      }
-    }
-    console.warn("[screener] Next button NOT found");
+    console.warn(`[screener] Next button NOT found for lesson ${lessonIndex}`);
     return null;
   }
-  function findPrevButton() {
-    const pageNumBtn = document.querySelector(SELECTORS.pageNumberButton);
+  function findPrevButton(lessonIndex) {
+    const pageNumBtn = getPageNumberButton(lessonIndex);
     if (pageNumBtn) {
       const sibling = pageNumBtn.previousElementSibling;
       if (sibling && sibling.tagName === "BUTTON")
@@ -155,12 +149,15 @@
           return firstBtn;
       }
     }
-    return document.querySelector(SELECTORS.prevButton);
+    return null;
   }
-  function getPageRect() {
-    let el = document.querySelector(SELECTORS.pdfPage);
-    if (!el)
-      el = document.querySelector(SELECTORS.pdfCanvas);
+  function getPageRect(lessonIndex) {
+    const allPages = document.querySelectorAll(SELECTORS.pdfPage);
+    let el = allPages[lessonIndex] || null;
+    if (!el) {
+      const allCanvases = document.querySelectorAll(SELECTORS.pdfCanvas);
+      el = allCanvases[lessonIndex] || null;
+    }
     if (!el)
       return null;
     const r = el.getBoundingClientRect();
@@ -174,11 +171,16 @@
     const height = bottom - y;
     if (width <= 0 || height <= 0)
       return null;
-    console.log("[screener] Page rect:", { x, y, width, height });
+    console.log(`[screener] Page rect for lesson ${lessonIndex}:`, { x, y, width, height });
     return { x, y, width, height };
   }
-  async function ensurePageVisible() {
-    const el = document.querySelector(SELECTORS.pdfPage) || document.querySelector(SELECTORS.pdfCanvas);
+  async function ensurePageVisible(lessonIndex) {
+    const allPages = document.querySelectorAll(SELECTORS.pdfPage);
+    let el = allPages[lessonIndex] || null;
+    if (!el) {
+      const allCanvases = document.querySelectorAll(SELECTORS.pdfCanvas);
+      el = allCanvases[lessonIndex] || null;
+    }
     if (!el)
       return;
     const r = el.getBoundingClientRect();
@@ -188,89 +190,92 @@
       await sleep(300);
     }
   }
-  function isNextDisabled() {
-    const btn = findNextButton();
+  function isNextDisabled(lessonIndex) {
+    const btn = findNextButton(lessonIndex);
     if (!btn) {
-      console.warn("[screener] isNextDisabled: button not found");
+      console.warn(`[screener] isNextDisabled: button not found for lesson ${lessonIndex}`);
       return true;
     }
     const reactDisabled = isReactDisabled(btn);
     const domDisabled = btn.disabled;
-    console.log(`[screener] Next: reactDisabled=${reactDisabled}, domDisabled=${domDisabled}`);
+    console.log(`[screener] Lesson ${lessonIndex} Next: reactDisabled=${reactDisabled}, domDisabled=${domDisabled}`);
     return reactDisabled;
   }
-  async function getPageInfo() {
-    await ensurePageVisible();
-    const pageNumber = readPageNumber();
-    const rect = getPageRect();
+  async function getPageInfo(lessonIndex = 0) {
+    await ensurePageVisible(lessonIndex);
+    const pageNumber = readPageNumber(lessonIndex);
+    const rect = getPageRect(lessonIndex);
     const dpr = window.devicePixelRatio || 1;
-    const nextDisabled = isNextDisabled();
-    console.log("[screener] getPageInfo:", { pageNumber, hasRect: !!rect, dpr, nextDisabled });
+    const nextDisabled = isNextDisabled(lessonIndex);
+    console.log(`[screener] getPageInfo (lesson ${lessonIndex}):`, { pageNumber, hasRect: !!rect, dpr, nextDisabled });
     return { pageNumber, rect, devicePixelRatio: dpr, isNextDisabled: nextDisabled };
   }
-  async function clickNextAndWait() {
-    const nextBtn = findNextButton();
+  async function clickNextAndWait(lessonIndex = 0) {
+    const nextBtn = findNextButton(lessonIndex);
     if (!nextBtn) {
       return { success: false, error: "Next button not found" };
     }
     if (isReactDisabled(nextBtn)) {
       return { success: false, isLastPage: true, error: "Next button is disabled (React state)" };
     }
-    const oldPageNumber = readPageNumber();
-    const oldDataPageNumber = document.querySelector(SELECTORS.pdfPage)?.getAttribute("data-page-number");
-    const oldRect = getPageRect();
-    console.log(`[screener] Clicking Next (current page: ${oldPageNumber})`);
+    const oldPageNumber = readPageNumber(lessonIndex);
+    const allPages = document.querySelectorAll(SELECTORS.pdfPage);
+    const pageEl = allPages[lessonIndex];
+    const oldDataPageNumber = pageEl?.getAttribute("data-page-number");
+    const oldRect = getPageRect(lessonIndex);
+    console.log(`[screener] Clicking Next for lesson ${lessonIndex} (current page: ${oldPageNumber})`);
     clickButton(nextBtn);
     const deadline = Date.now() + TIMING.pageChangeTimeout;
     while (Date.now() < deadline) {
       await sleep(TIMING.pageChangePoll);
-      const newPageNumber = readPageNumber();
+      const newPageNumber = readPageNumber(lessonIndex);
       if (newPageNumber > 0 && newPageNumber !== oldPageNumber) {
         return { success: true, newPageNumber };
       }
-      const newDataAttr = document.querySelector(SELECTORS.pdfPage)?.getAttribute("data-page-number");
+      const currentPageEl = document.querySelectorAll(SELECTORS.pdfPage)[lessonIndex];
+      const newDataAttr = currentPageEl?.getAttribute("data-page-number");
       if (newDataAttr && newDataAttr !== oldDataPageNumber) {
         return { success: true, newPageNumber: parseInt(newDataAttr, 10) || newPageNumber };
       }
-      const newRect = getPageRect();
+      const newRect = getPageRect(lessonIndex);
       if (oldRect && newRect && Math.abs(newRect.y - oldRect.y) > 50) {
-        return { success: true, newPageNumber: readPageNumber() };
+        return { success: true, newPageNumber: readPageNumber(lessonIndex) };
       }
-      if (isNextDisabled() && readPageNumber() !== oldPageNumber) {
-        return { success: true, newPageNumber: readPageNumber(), isLastPage: true };
+      if (isNextDisabled(lessonIndex) && readPageNumber(lessonIndex) !== oldPageNumber) {
+        return { success: true, newPageNumber: readPageNumber(lessonIndex), isLastPage: true };
       }
     }
-    const finalPage = readPageNumber();
+    const finalPage = readPageNumber(lessonIndex);
     if (finalPage !== oldPageNumber && finalPage > 0) {
       return { success: true, newPageNumber: finalPage };
     }
     return { success: false, error: "Timeout waiting for page change" };
   }
-  async function goToFirstPage() {
+  async function goToFirstPage(lessonIndex = 0) {
     const MAX_CLICKS = 200;
     let clicks = 0;
     while (clicks < MAX_CLICKS) {
-      const prevBtn = findPrevButton();
+      const prevBtn = findPrevButton(lessonIndex);
       if (!prevBtn)
         return { success: false, error: "Prev button not found" };
       if (isReactDisabled(prevBtn)) {
-        const page = readPageNumber();
-        console.log(`[screener] On first page (${page})`);
+        const page = readPageNumber(lessonIndex);
+        console.log(`[screener] Lesson ${lessonIndex} on first page (${page})`);
         return { success: true, pageNumber: page };
       }
-      const oldPage = readPageNumber();
+      const oldPage = readPageNumber(lessonIndex);
       clickButton(prevBtn);
       clicks++;
       const deadline = Date.now() + TIMING.pageChangeTimeout;
       while (Date.now() < deadline) {
         await sleep(TIMING.pageChangePoll);
-        const newPage = readPageNumber();
+        const newPage = readPageNumber(lessonIndex);
         if (newPage !== oldPage && newPage > 0)
           break;
       }
       await sleep(200);
     }
-    return { success: true, pageNumber: readPageNumber() };
+    return { success: true, pageNumber: readPageNumber(lessonIndex) };
   }
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -282,7 +287,8 @@
     chrome.runtime.onMessage.addListener(
       (message, _sender, sendResponse) => {
         if (message.type === "get-page-info") {
-          getPageInfo().then((info) => sendResponse({ success: true, data: info })).catch(
+          const lessonIndex = message.lessonIndex ?? 0;
+          getPageInfo(lessonIndex).then((info) => sendResponse({ success: true, data: info })).catch(
             (err) => sendResponse({
               success: false,
               error: err instanceof Error ? err.message : String(err)
@@ -291,7 +297,8 @@
           return true;
         }
         if (message.type === "click-next") {
-          clickNextAndWait().then((result) => sendResponse(result)).catch(
+          const lessonIndex = message.lessonIndex ?? 0;
+          clickNextAndWait(lessonIndex).then((result) => sendResponse(result)).catch(
             (err) => sendResponse({
               success: false,
               error: err instanceof Error ? err.message : String(err)
@@ -300,13 +307,19 @@
           return true;
         }
         if (message.type === "go-to-first") {
-          goToFirstPage().then((result) => sendResponse(result)).catch(
+          const lessonIndex = message.lessonIndex ?? 0;
+          goToFirstPage(lessonIndex).then((result) => sendResponse(result)).catch(
             (err) => sendResponse({
               success: false,
               error: err instanceof Error ? err.message : String(err)
             })
           );
           return true;
+        }
+        if (message.type === "get-lesson-count") {
+          const count = getLessonCount();
+          sendResponse({ success: true, count });
+          return false;
         }
         return false;
       }

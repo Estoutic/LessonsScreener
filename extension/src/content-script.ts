@@ -6,8 +6,8 @@
  * The guard prevents duplicate message listeners.
  */
 
-import { getPageInfo, clickNextAndWait, goToFirstPage } from './dom-adapter';
-import type { ContentMessage, PageInfoResponse, ClickNextResponse, GoToFirstResponse } from './types';
+import { getPageInfo, clickNextAndWait, goToFirstPage, getLessonCount } from './dom-adapter';
+import type { ContentMessage, PageInfoResponse, ClickNextResponse, GoToFirstResponse, LessonCountResponse } from './types';
 
 declare global {
   interface Window {
@@ -21,7 +21,8 @@ if (!window.__screener_loaded) {
   chrome.runtime.onMessage.addListener(
     (message: ContentMessage, _sender, sendResponse: (response: unknown) => void) => {
       if (message.type === 'get-page-info') {
-        getPageInfo()
+        const lessonIndex = message.lessonIndex ?? 0;
+        getPageInfo(lessonIndex)
           .then((info) => sendResponse({ success: true, data: info } as PageInfoResponse))
           .catch((err) =>
             sendResponse({
@@ -33,7 +34,8 @@ if (!window.__screener_loaded) {
       }
 
       if (message.type === 'click-next') {
-        clickNextAndWait()
+        const lessonIndex = message.lessonIndex ?? 0;
+        clickNextAndWait(lessonIndex)
           .then((result) => sendResponse(result))
           .catch((err) =>
             sendResponse({
@@ -45,7 +47,8 @@ if (!window.__screener_loaded) {
       }
 
       if (message.type === 'go-to-first') {
-        goToFirstPage()
+        const lessonIndex = message.lessonIndex ?? 0;
+        goToFirstPage(lessonIndex)
           .then((result) => sendResponse(result))
           .catch((err) =>
             sendResponse({
@@ -54,6 +57,12 @@ if (!window.__screener_loaded) {
             } as GoToFirstResponse),
           );
         return true;
+      }
+
+      if (message.type === 'get-lesson-count') {
+        const count = getLessonCount();
+        sendResponse({ success: true, count } as LessonCountResponse);
+        return false;
       }
 
       return false;

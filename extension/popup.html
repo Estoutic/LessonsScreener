@@ -48,6 +48,36 @@
       background: #636e72;
       color: #fff;
     }
+    .lesson-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .lesson-row select {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #2d2d44;
+      border-radius: 4px;
+      background: #0f0f23;
+      color: #e0e0e0;
+      font-size: 12px;
+    }
+    #btn-scan {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      background: #636e72;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #btn-scan:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
     .info-row {
       display: flex;
       justify-content: space-between;
@@ -81,6 +111,13 @@
 </head>
 <body>
   <h1>Screener</h1>
+
+  <div class="lesson-row">
+    <select id="lesson-select">
+      <option value="all">All lessons</option>
+    </select>
+    <button id="btn-scan">Scan</button>
+  </div>
 
   <div class="controls">
     <button id="btn-start">Start</button>
