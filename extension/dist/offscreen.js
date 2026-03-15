@@ -48,8 +48,8 @@
   }
 
   // src/pdf.ts
-  var JPEG_QUALITY = 0.7;
-  var MAX_WIDTH_PX = 800;
+  var JPEG_QUALITY = 0.85;
+  var MAX_WIDTH_PX = 1600;
   function loadImage(dataUrl) {
     return new Promise((resolve, reject) => {
       const img = new Image();

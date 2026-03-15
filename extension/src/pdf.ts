@@ -9,10 +9,10 @@
 
 // ── Compression settings ──────────────────────────────────────
 /** JPEG quality (0.0 – 1.0). 0.7 = good balance of quality/size */
-const JPEG_QUALITY = 0.7;
+const JPEG_QUALITY = 0.85;
 
-/** Max image width in pixels. Retina screenshots are ~1090 px; 800 is plenty. */
-const MAX_WIDTH_PX = 800;
+/** Max image width in pixels. Retina screenshots are ~1090 px. */
+const MAX_WIDTH_PX = 1600;
 
 // ── Image helpers ─────────────────────────────────────────────
 
